@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Password Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* ─── CSS Variables ─── */
+  :root {
+    --bg:       #060d1a;
+    --surface:  rgba(255,255,255,.06);
+    --border:   rgba(255,255,255,.10);
+    --accent:   #38bdf8;
+    --accent2:  #818cf8;
+    --danger:   #f87171;
+    --success:  #34d399;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --glass-bg: rgba(14,22,40,.75);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridScroll 20s linear infinite;
+  }
+  @keyframes gridScroll { to { background-position: 40px 40px; } }
+
+  /* Glow orbs */
+  .orb {
+    position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0;
+  }
+  .orb-1 { width:500px;height:500px; top:-200px;left:-150px; background:rgba(56,189,248,.12); }
+  .orb-2 { width:400px;height:400px; bottom:-150px;right:-100px; background:rgba(129,140,248,.10); }
+
+  /* Glass card */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+
+  /* Input */
+  .inp {
+    width: 100%;
+    background: rgba(255,255,255,.05);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: .875rem;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .inp:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(56,189,248,.15);
+  }
+  .inp::placeholder { color: var(--muted); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px; border-radius: 10px; font-family: inherit;
+    font-size: .85rem; font-weight: 600; cursor: pointer;
+    border: none; transition: all .2s; position: relative; overflow: hidden;
+  }
+  .btn::after {
+    content:''; position:absolute; inset:0;
+    background: white; opacity:0; transition: opacity .15s;
+  }
+  .btn:hover::after { opacity: .06; }
+  .btn:active { transform: scale(.97); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #0ea5e9);
+    color: #0a1628; box-shadow: 0 4px 20px rgba(56,189,248,.3);
+  }
+  .btn-secondary {
+    background: rgba(255,255,255,.08);
+    border: 1px solid var(--border); color: var(--text);
+  }
+  .btn-danger {
+    background: rgba(248,113,113,.15);
+    border: 1px solid rgba(248,113,113,.3); color: var(--danger);
+  }
+  .btn-success {
+    background: rgba(52,211,153,.15);
+    border: 1px solid rgba(52,211,153,.3); color: var(--success);
+  }
+  .btn-sm { padding: 6px 12px; font-size: .78rem; border-radius: 8px; }
+
+  /* Tag / badge */
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    animation: fadeIn .2s ease;
+  }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  .modal-box {
+    width: 100%; max-width: 480px;
+    animation: slideUp .25s ease;
+  }
+  @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  /* Toast */
+  #toast-container {
+    position: fixed; top: 20px; right: 20px; z-index: 100;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .toast {
+    padding: 12px 20px; border-radius: 12px; font-size: .85rem; font-weight: 500;
+    backdrop-filter: blur(16px); min-width: 220px;
+    animation: toastIn .3s ease;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  }
+  @keyframes toastIn { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+  .toast-success { background:rgba(52,211,153,.2); border:1px solid rgba(52,211,153,.4); color:#6ee7b7; }
+  .toast-error   { background:rgba(248,113,113,.2); border:1px solid rgba(248,113,113,.4); color:#fca5a5; }
+  .toast-info    { background:rgba(56,189,248,.2);  border:1px solid rgba(56,189,248,.4);  color:#7dd3fc; }
+
+  /* Table row hover */
+  .vault-row { transition: background .15s; }
+  .vault-row:hover { background: rgba(56,189,248,.05); }
+
+  /* Password mask */
+  .pw-hidden { letter-spacing: .1em; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 3px; }
+
+  /* Page transitions */
+  .page { animation: fadeIn .3s ease; }
+
+  /* Search highlight */
+  mark { background: rgba(56,189,248,.3); color: var(--text); border-radius: 3px; padding: 0 2px; }
+</style>
+</head>
+<body>
+
+<!-- Background decoration -->
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════════════════ -->
+<div id="page-login" class="page min-h-screen flex items-center justify-center p-4 relative z-10">
+  <div class="glass modal-box p-10 text-center" style="max-width:400px">
+    <!-- Logo -->
+    <div class="mb-8">
+      <div class="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center"
+           style="background:linear-gradient(135deg,#38bdf8,#818cf8);box-shadow:0 8px 32px rgba(56,189,248,.4)">
+        <svg width="30" height="30" fill="none" viewBox="0 0 24 24">
+          <path d="M12 1L3 5v6c0 5.25 3.75 10.15 9 11.25C17.25 21.15 21 16.25 21 11V5L12 1Z"
+                fill="rgba(255,255,255,.2)" stroke="white" stroke-width="1.5"/>
+          <circle cx="12" cy="11" r="3" stroke="white" stroke-width="1.5"/>
+          <path d="M12 14v3" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1 style="font-family:'Rajdhani',sans-serif;font-size:1.8rem;font-weight:700;
+                  background:linear-gradient(135deg,#38bdf8,#818cf8);
+                  -webkit-background-clip:text;-webkit-text-fill-color:transparent">
+        PASSWORD VAULT
+      </h1>
+      <p class="text-sm mt-1" style="color:var(--muted)">ระบบจัดการรหัสผ่านส่วนตัว</p>
+    </div>
+
+    <div class="space-y-4 text-left">
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">USERNAME</label>
+        <input id="login-user" type="text" class="inp" placeholder="กรอก username" autocomplete="username"/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">PASSWORD</label>
+        <div class="relative">
+          <input id="login-pass" type="password" class="inp pr-10" placeholder="กรอก password" autocomplete="current-password"/>
+          <button type="button" onclick="toggleVis('login-pass',this)"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 opacity-40 hover:opacity-80 transition-opacity"
+                  style="background:none;border:none;color:var(--text);cursor:pointer">
+            👁
+          </button>
+        </div>
+      </div>
+      <button id="login-btn" onclick="doLogin()" class="btn btn-primary w-full justify-center mt-2" style="width:100%;padding:12px">
+        <span id="login-btn-text">เข้าสู่ระบบ</span>
+      </button>
+    </div>
+
+    <p class="text-xs mt-6" style="color:var(--muted)">
+      Default: admin / admin1234
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MAIN APP PAGE
+══════════════════════════════════════════════ -->
+<div id="page-app" class="hidden relative z-10 min-h-screen">
+
+  <!-- Top nav -->
+  <nav class="glass sticky top-0 z-40 px-6 py-4 flex items-center justify-between"
+       style="border-radius:0;border-left:none;border-right:none;border-top:none">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center"
+           style="background:linear-gradient(135deg,#38bdf8,#818cf8)">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
+          <path d="M12 1L3 5v6c0 5.25 3.75 10.15 9 11.25C17.25 21.15 21 16.25 21 11V5L12 1Z"
+                fill="rgba(255,255,255,.3)" stroke="white" stroke-width="1.8"/>
+          <circle cx="12" cy="11" r="3" stroke="white" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <span style="font-family:'Rajdhani',sans-serif;font-size:1.1rem;font-weight:700;
+                   background:linear-gradient(135deg,#38bdf8,#818cf8);
+                   -webkit-background-clip:text;-webkit-text-fill-color:transparent">
+        PASSWORD VAULT
+      </span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="nav-user" class="text-sm hidden sm:block" style="color:var(--muted)"></span>
+      <button onclick="openChangePw()" class="btn btn-secondary btn-sm">🔑 เปลี่ยนรหัส</button>
+      <button onclick="doLogout()" class="btn btn-danger btn-sm">ออกจากระบบ</button>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+    <!-- Header row -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-2xl font-bold">รายการทั้งหมด</h2>
+        <p class="text-sm mt-1" style="color:var(--muted)">
+          จัดเก็บ <span id="count-label" class="font-semibold" style="color:var(--accent)">0</span> รายการ
+        </p>
+      </div>
+      <div class="flex gap-3 w-full sm:w-auto">
+        <input id="search-box" type="text" class="inp" style="min-width:220px"
+               placeholder="🔍 ค้นหา..." oninput="renderTable()"/>
+        <button onclick="openModal()" class="btn btn-primary whitespace-nowrap">
+          + เพิ่มรายการ
+        </button>
+      </div>
+    </div>
+
+    <!-- Table card -->
+    <div class="glass overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border);background:rgba(56,189,248,.05)">
+              <th class="text-left px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">#</th>
+              <th class="text-left px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">ชื่อ / NAME</th>
+              <th class="text-left px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">LINK</th>
+              <th class="text-left px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">USERNAME</th>
+              <th class="text-left px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">PASSWORD</th>
+              <th class="text-right px-5 py-3.5 font-semibold text-xs tracking-wider" style="color:var(--muted)">ACTION</th>
+            </tr>
+          </thead>
+          <tbody id="vault-tbody">
+            <tr>
+              <td colspan="6" class="text-center py-16" style="color:var(--muted)">
+                <div class="text-4xl mb-3">🔒</div>
+                <p>กำลังโหลดข้อมูล...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL — Add / Edit
+══════════════════════════════════════════════ -->
+<div id="modal-form" class="modal-overlay hidden">
+  <div class="glass modal-box p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h3 id="modal-title" class="text-lg font-bold">เพิ่มรายการใหม่</h3>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--muted);
+              font-size:1.4rem;cursor:pointer;line-height:1;transition:color .15s"
+              onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">✕</button>
+    </div>
+    <div class="space-y-4">
+      <input type="hidden" id="form-id"/>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">ชื่อ / NAME <span style="color:var(--danger)">*</span></label>
+        <input id="form-name" type="text" class="inp" placeholder="เช่น Gmail, Facebook, LINE"/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">LINK / URL</label>
+        <input id="form-link" type="text" class="inp" placeholder="https://..."/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">USERNAME / EMAIL <span style="color:var(--danger)">*</span></label>
+        <input id="form-username" type="text" class="inp" placeholder="username หรือ email"/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">PASSWORD <span style="color:var(--danger)">*</span></label>
+        <div class="relative">
+          <input id="form-password" type="password" class="inp pr-20" placeholder="รหัสผ่าน"/>
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+            <button type="button" onclick="toggleVis('form-password',this)"
+                    class="text-xs px-2 py-1 rounded transition-opacity opacity-50 hover:opacity-100"
+                    style="background:rgba(255,255,255,.1);border:none;color:var(--text);cursor:pointer">👁</button>
+            <button type="button" onclick="genPassword()"
+                    class="text-xs px-2 py-1 rounded transition-opacity opacity-50 hover:opacity-100"
+                    style="background:rgba(56,189,248,.2);border:none;color:var(--accent);cursor:pointer"
+                    title="สุ่มรหัสผ่าน">⚡</button>
+          </div>
+        </div>
+        <div id="pw-strength" class="mt-1.5 h-1 rounded-full" style="background:rgba(255,255,255,.08)">
+          <div id="pw-strength-bar" class="h-full rounded-full transition-all duration-300" style="width:0%"></div>
+        </div>
+        <p id="pw-strength-label" class="text-xs mt-1" style="color:var(--muted)"></p>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6 justify-end">
+      <button onclick="closeModal()" class="btn btn-secondary">ยกเลิก</button>
+      <button onclick="saveRecord()" id="save-btn" class="btn btn-primary">
+        <span id="save-btn-text">💾 บันทึก</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL — Change Password -->
+<div id="modal-changepw" class="modal-overlay hidden">
+  <div class="glass modal-box p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="text-lg font-bold">🔑 เปลี่ยนรหัสผ่านเข้าระบบ</h3>
+      <button onclick="closeChangePw()" style="background:none;border:none;color:var(--muted);
+              font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">รหัสผ่านเดิม</label>
+        <input id="cpw-old" type="password" class="inp" placeholder="Old password"/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">รหัสผ่านใหม่</label>
+        <input id="cpw-new" type="password" class="inp" placeholder="New password"/>
+      </div>
+      <div>
+        <label class="text-xs font-medium mb-1.5 block" style="color:var(--muted)">ยืนยันรหัสผ่านใหม่</label>
+        <input id="cpw-confirm" type="password" class="inp" placeholder="Confirm password"/>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-6 justify-end">
+      <button onclick="closeChangePw()" class="btn btn-secondary">ยกเลิก</button>
+      <button onclick="submitChangePw()" class="btn btn-primary">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL — Delete confirm -->
+<div id="modal-delete" class="modal-overlay hidden">
+  <div class="glass modal-box p-6" style="max-width:380px">
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">🗑️</div>
+      <h3 class="text-lg font-bold">ยืนยันการลบ</h3>
+      <p class="text-sm mt-2" style="color:var(--muted)">
+        ต้องการลบรายการ <strong id="del-name" class="text-white"></strong> ใช่หรือไม่?<br/>
+        การกระทำนี้ไม่สามารถย้อนกลับได้
+      </p>
+    </div>
+    <div class="flex gap-3 justify-center">
+      <button onclick="closeDelete()" class="btn btn-secondary">ยกเลิก</button>
+      <button onclick="confirmDelete()" class="btn btn-danger">ลบเลย</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CONFIG — เปลี่ยน GAS_URL เป็น Web App URL ของคุณ
+// ═══════════════════════════════════════════════════
+const GAS_URL = "https://script.google.com/macros/s/REPLACE_WITH_YOUR_DEPLOYMENT_ID/exec";
+
+// ─── State ─────────────────────────────────────────
+let token    = localStorage.getItem("vault_token") || null;
+let username = localStorage.getItem("vault_user")  || null;
+let records  = [];
+let pendingDeleteId = null;
+
+// ─── API helpers ────────────────────────────────────
+async function apiGet(params) {
+  const q = new URLSearchParams({ ...params, token: token || "" });
+  const res = await fetch(GAS_URL + "?" + q);
+  return res.json();
+}
+
+async function apiPost(body) {
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, token: token || "" })
+  });
+  return res.json();
+}
+
+// ─── Toast ──────────────────────────────────────────
+function toast(msg, type = "info") {
+  const el = document.createElement("div");
+  el.className = "toast toast-" + type;
+  el.textContent = msg;
+  document.getElementById("toast-container").appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── Page switching ──────────────────────────────────
+function showPage(name) {
+  document.getElementById("page-login").classList.toggle("hidden", name !== "login");
+  document.getElementById("page-app").classList.toggle("hidden", name !== "app");
+}
+
+// ─── Login ───────────────────────────────────────────
+async function doLogin() {
+  const user = document.getElementById("login-user").value.trim();
+  const pass = document.getElementById("login-pass").value;
+  if (!user || !pass) { toast("กรุณากรอกข้อมูลให้ครบ", "error"); return; }
+
+  const btn  = document.getElementById("login-btn");
+  const txt  = document.getElementById("login-btn-text");
+  btn.disabled = true; txt.textContent = "กำลังตรวจสอบ...";
+
+  try {
+    const r = await apiPost({ action: "login", username: user, password: pass });
+    if (r.token) {
+      token = r.token; username = r.username;
+      localStorage.setItem("vault_token", token);
+      localStorage.setItem("vault_user", username);
+      document.getElementById("nav-user").textContent = "👤 " + username;
+      showPage("app");
+      await loadRecords();
+      toast("ยินดีต้อนรับ " + username + " 👋", "success");
+    } else {
+      toast(r.error || "เข้าสู่ระบบล้มเหลว", "error");
+    }
+  } catch { toast("ไม่สามารถเชื่อมต่อ GAS ได้", "error"); }
+  finally { btn.disabled = false; txt.textContent = "เข้าสู่ระบบ"; }
+}
+
+document.getElementById("login-pass").addEventListener("keydown", e => {
+  if (e.key === "Enter") doLogin();
+});
+
+async function doLogout() {
+  await apiPost({ action: "logout" }).catch(() => {});
+  token = null; username = null;
+  localStorage.removeItem("vault_token");
+  localStorage.removeItem("vault_user");
+  showPage("login");
+  toast("ออกจากระบบแล้ว", "info");
+}
+
+// ─── Load records ────────────────────────────────────
+async function loadRecords() {
+  try {
+    const r = await apiGet({ action: "list" });
+    if (r.data) {
+      records = r.data;
+      renderTable();
+    } else if (r.error === "Unauthorized") {
+      doLogout();
+    }
+  } catch { toast("โหลดข้อมูลล้มเหลว", "error"); }
+}
+
+// ─── Render table ────────────────────────────────────
+function highlight(text, query) {
+  if (!query) return escHtml(text);
+  const re = new RegExp("(" + query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "gi");
+  return escHtml(text).replace(re, "<mark>$1</mark>");
+}
+
+function escHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function renderTable() {
+  const q = (document.getElementById("search-box").value || "").toLowerCase();
+  const filtered = records.filter(r =>
+    (r.name || "").toLowerCase().includes(q) ||
+    (r.link || "").toLowerCase().includes(q) ||
+    (r.username || "").toLowerCase().includes(q)
+  );
+
+  document.getElementById("count-label").textContent = filtered.length;
+
+  const tbody = document.getElementById("vault-tbody");
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-16" style="color:var(--muted)">
+      <div class="text-4xl mb-3">🔍</div>
+      <p>ไม่พบรายการ${q ? " ที่ตรงกับ \"" + escHtml(q) + "\"" : ""}</p>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((r, i) => `
+    <tr class="vault-row" style="border-bottom:1px solid rgba(255,255,255,.04)">
+      <td class="px-5 py-4" style="color:var(--muted);font-size:.8rem">${i + 1}</td>
+      <td class="px-5 py-4 font-medium">${highlight(r.name, q)}</td>
+      <td class="px-5 py-4">
+        ${r.link
+          ? `<a href="${escHtml(r.link)}" target="_blank" rel="noopener"
+               class="text-xs flex items-center gap-1 hover:underline"
+               style="color:var(--accent);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+               🔗 ${highlight(r.link, q)}
+             </a>`
+          : `<span style="color:var(--muted)">-</span>`}
+      </td>
+      <td class="px-5 py-4">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-sm">${highlight(r.username, q)}</span>
+          <button onclick="copyText('${escHtml(r.username)}','Username')"
+                  title="คัดลอก" style="background:none;border:none;cursor:pointer;opacity:.5;
+                  transition:opacity .15s;font-size:.9rem" onmouseover="this.style.opacity='1'"
+                  onmouseout="this.style.opacity='.5'">📋</button>
+        </div>
+      </td>
+      <td class="px-5 py-4">
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-sm pw-hidden" id="pw-${r.id}">••••••••</span>
+          <button onclick="togglePw('${r.id}','${escHtml(r.password)}')"
+                  id="btn-eye-${r.id}"
+                  style="background:none;border:none;cursor:pointer;opacity:.5;
+                  transition:opacity .15s;font-size:.9rem" onmouseover="this.style.opacity='1'"
+                  onmouseout="this.style.opacity='.5'">👁</button>
+          <button onclick="copyText('${escHtml(r.password)}','Password')"
+                  style="background:none;border:none;cursor:pointer;opacity:.5;
+                  transition:opacity .15s;font-size:.9rem" onmouseover="this.style.opacity='1'"
+                  onmouseout="this.style.opacity='.5'">📋</button>
+        </div>
+      </td>
+      <td class="px-5 py-4 text-right">
+        <div class="flex items-center justify-end gap-2">
+          <button onclick='openEdit(${JSON.stringify(r)})' class="btn btn-secondary btn-sm">✏️ แก้ไข</button>
+          <button onclick="openDelete('${r.id}','${escHtml(r.name)}')" class="btn btn-danger btn-sm">🗑️</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+// ─── Helpers ─────────────────────────────────────────
+function togglePw(id, plain) {
+  const el = document.getElementById("pw-" + id);
+  const shown = el.dataset.shown === "1";
+  el.textContent = shown ? "••••••••" : plain;
+  el.dataset.shown = shown ? "" : "1";
+  el.classList.toggle("pw-hidden", !shown);
+}
+
+function copyText(text, label) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast(label + " คัดลอกแล้ว! 📋", "success");
+  }).catch(() => {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand("copy"); ta.remove();
+    toast(label + " คัดลอกแล้ว! 📋", "success");
+  });
+}
+
+function toggleVis(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  inp.type = inp.type === "password" ? "text" : "password";
+  btn.style.opacity = inp.type === "text" ? "1" : "0.4";
+}
+
+// ─── Modal Add/Edit ──────────────────────────────────
+function openModal() {
+  document.getElementById("form-id").value = "";
+  document.getElementById("form-name").value = "";
+  document.getElementById("form-link").value = "";
+  document.getElementById("form-username").value = "";
+  document.getElementById("form-password").value = "";
+  document.getElementById("modal-title").textContent = "เพิ่มรายการใหม่";
+  document.getElementById("save-btn-text").textContent = "💾 บันทึก";
+  updatePwStrength();
+  document.getElementById("modal-form").classList.remove("hidden");
+  setTimeout(() => document.getElementById("form-name").focus(), 100);
+}
+
+function openEdit(r) {
+  document.getElementById("form-id").value = r.id;
+  document.getElementById("form-name").value = r.name || "";
+  document.getElementById("form-link").value = r.link || "";
+  document.getElementById("form-username").value = r.username || "";
+  document.getElementById("form-password").value = r.password || "";
+  document.getElementById("modal-title").textContent = "✏️ แก้ไขรายการ";
+  document.getElementById("save-btn-text").textContent = "💾 อัปเดต";
+  updatePwStrength();
+  document.getElementById("modal-form").classList.remove("hidden");
+}
+
+function closeModal() {
+  document.getElementById("modal-form").classList.add("hidden");
+}
+
+async function saveRecord() {
+  const id   = document.getElementById("form-id").value.trim();
+  const name = document.getElementById("form-name").value.trim();
+  const link = document.getElementById("form-link").value.trim();
+  const uname= document.getElementById("form-username").value.trim();
+  const pass = document.getElementById("form-password").value;
+
+  if (!name || !uname || !pass) {
+    toast("กรุณากรอกข้อมูลที่จำเป็น (*)", "error"); return;
+  }
+
+  const btn = document.getElementById("save-btn");
+  btn.disabled = true;
+  document.getElementById("save-btn-text").textContent = "กำลังบันทึก...";
+
+  try {
+    const action = id ? "update" : "create";
+    const r = await apiPost({ action, id, name, link, username: uname, password: pass });
+    if (r.status === 200 || r.message) {
+      toast(id ? "อัปเดตแล้ว ✅" : "เพิ่มรายการแล้ว ✅", "success");
+      closeModal();
+      await loadRecords();
+    } else {
+      toast(r.error || "เกิดข้อผิดพลาด", "error");
+    }
+  } catch { toast("ไม่สามารถเชื่อมต่อได้", "error"); }
+  finally {
+    btn.disabled = false;
+    document.getElementById("save-btn-text").textContent = "💾 บันทึก";
+  }
+}
+
+// ─── Delete ──────────────────────────────────────────
+function openDelete(id, name) {
+  pendingDeleteId = id;
+  document.getElementById("del-name").textContent = name;
+  document.getElementById("modal-delete").classList.remove("hidden");
+}
+function closeDelete() {
+  pendingDeleteId = null;
+  document.getElementById("modal-delete").classList.add("hidden");
+}
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  try {
+    const r = await apiPost({ action: "delete", id: pendingDeleteId });
+    if (r.message) {
+      toast("ลบรายการแล้ว 🗑️", "info");
+      closeDelete();
+      await loadRecords();
+    } else {
+      toast(r.error || "ลบไม่สำเร็จ", "error");
+    }
+  } catch { toast("เกิดข้อผิดพลาด", "error"); }
+}
+
+// ─── Change password ─────────────────────────────────
+function openChangePw()  { document.getElementById("modal-changepw").classList.remove("hidden"); }
+function closeChangePw() { document.getElementById("modal-changepw").classList.add("hidden"); }
+
+async function submitChangePw() {
+  const oldPw = document.getElementById("cpw-old").value;
+  const newPw = document.getElementById("cpw-new").value;
+  const conf  = document.getElementById("cpw-confirm").value;
+  if (!oldPw || !newPw || !conf) { toast("กรุณากรอกข้อมูลให้ครบ", "error"); return; }
+  if (newPw !== conf) { toast("รหัสผ่านใหม่ไม่ตรงกัน", "error"); return; }
+  try {
+    const r = await apiPost({ action: "changePassword", oldPassword: oldPw, newPassword: newPw });
+    if (r.message) {
+      toast("เปลี่ยนรหัสผ่านสำเร็จ ✅", "success");
+      closeChangePw();
+      document.getElementById("cpw-old").value = "";
+      document.getElementById("cpw-new").value = "";
+      document.getElementById("cpw-confirm").value = "";
+    } else {
+      toast(r.error || "เปลี่ยนรหัสผ่านไม่สำเร็จ", "error");
+    }
+  } catch { toast("เกิดข้อผิดพลาด", "error"); }
+}
+
+// ─── Password strength ───────────────────────────────
+function updatePwStrength() {
+  const v = document.getElementById("form-password").value;
+  let score = 0;
+  if (v.length >= 8)  score++;
+  if (/[A-Z]/.test(v)) score++;
+  if (/[0-9]/.test(v)) score++;
+  if (/[^a-zA-Z0-9]/.test(v)) score++;
+  const bar   = document.getElementById("pw-strength-bar");
+  const label = document.getElementById("pw-strength-label");
+  const levels = [
+    { w: "0%",   bg: "", txt: "" },
+    { w: "25%",  bg: "var(--danger)", txt: "อ่อนมาก" },
+    { w: "50%",  bg: "#fb923c", txt: "พอใช้" },
+    { w: "75%",  bg: "#facc15", txt: "ดี" },
+    { w: "100%", bg: "var(--success)", txt: "แข็งแกร่ง! 💪" },
+  ];
+  bar.style.width = levels[score].w;
+  bar.style.background = levels[score].bg;
+  label.textContent = v.length ? levels[score].txt : "";
+  label.style.color = levels[score].bg;
+}
+document.getElementById("form-password").addEventListener("input", updatePwStrength);
+
+// ─── Generate password ───────────────────────────────
+function genPassword() {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+  let pw = "";
+  for (let i = 0; i < 16; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  const inp = document.getElementById("form-password");
+  inp.value = pw;
+  inp.type = "text";
+  updatePwStrength();
+  copyText(pw, "Password ที่สุ่ม");
+  toast("สุ่มรหัสผ่านแล้ว (คัดลอกแล้วด้วย) ⚡", "success");
+}
+
+// ─── Close modals on overlay click ──────────────────
+document.getElementById("modal-form").addEventListener("click", e => {
+  if (e.target === document.getElementById("modal-form")) closeModal();
+});
+document.getElementById("modal-delete").addEventListener("click", e => {
+  if (e.target === document.getElementById("modal-delete")) closeDelete();
+});
+document.getElementById("modal-changepw").addEventListener("click", e => {
+  if (e.target === document.getElementById("modal-changepw")) closeChangePw();
+});
+
+// ─── Init ─────────────────────────────────────────────
+(async () => {
+  if (token) {
+    // ลองดึงข้อมูล เพื่อเช็คว่า token ยังใช้ได้ไหม
+    showPage("app");
+    document.getElementById("nav-user").textContent = "👤 " + (username || "");
+    await loadRecords();
+  } else {
+    showPage("login");
+  }
+})();
+</script>
+</body>
+</html>
